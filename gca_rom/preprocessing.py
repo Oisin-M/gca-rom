@@ -5,7 +5,7 @@ from torch_geometric.loader import DataLoader
 from gca_rom import scaling
 
 
-def graphs_dataset(dataset, HyperParams, pos):
+def graphs_dataset(dataset, HyperParams, pos=None):
     """
     graphs_dataset: function to process and scale the input dataset for graph autoencoder model.
 
@@ -65,10 +65,15 @@ def graphs_dataset(dataset, HyperParams, pos):
     graphs = []
     edge_index = torch.t(dataset.E) - 1
     for graph in range(num_graphs):
-#         if dataset.dim == 2:
-#             pos = torch.cat((xx[:, graph].unsqueeze(1), yy[:, graph].unsqueeze(1)), 1)
-#         elif dataset.dim == 3:
-#             pos = torch.cat((xx[:, graph].unsqueeze(1), yy[:, graph].unsqueeze(1), zz[:, graph].unsqueeze(1)), 1)
+
+        if HyperParams.GBM:
+            if pos is None:
+                raise Exception("GBM requires a reference mesh.")
+        else:
+            if dataset.dim == 2:
+                pos = torch.cat((xx[:, graph].unsqueeze(1), yy[:, graph].unsqueeze(1)), 1)
+            elif dataset.dim == 3:
+                pos = torch.cat((xx[:, graph].unsqueeze(1), yy[:, graph].unsqueeze(1), zz[:, graph].unsqueeze(1)), 1)
         ei = torch.index_select(pos, 0, edge_index[0, :])
         ej = torch.index_select(pos, 0, edge_index[1, :])
         edge_diff = ej - ei

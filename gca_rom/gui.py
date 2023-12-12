@@ -96,7 +96,7 @@ def hyperparameters_selection(name, var, n):
         dropdown_menu_2.grid(row=row, column=5, columnspan=3)
         selected_var_2.trace("w", on_option_selected_2)  # Bind the on_option_selected function to the OptionMenu widget
 
-        # BOLEAN BUTTON
+        # BOOLEAN BUTTON
         row = 2
         flag1 = tk.BooleanVar()
         flag1.set(True) #set check state
@@ -184,7 +184,7 @@ def hyperparameters_selection(name, var, n):
         radio_button3_6.grid(row=row, column=6, columnspan=2)
         radio_button4_6 = tk.Radiobutton(root, text="25", variable=selected_var_6, value=25, command=on_option_selected_6)
         radio_button4_6.grid(row=row, column=8, columnspan=2)
-        radio_button5_6 = tk.Radiobutton(root, text="30", variable=selected_var_6, value=30, command=on_option_selected_6)
+        radio_button5_6 = tk.Radiobutton(root, text="100", variable=selected_var_6, value=100, command=on_option_selected_6)
         radio_button5_6.grid(row=row, column=10, columnspan=2)
 
         # RADIO BUTTON
@@ -241,6 +241,13 @@ def hyperparameters_selection(name, var, n):
         entry.insert(0, str(preset_options_9[0])) 
         entry.grid(row=row, column=5, columnspan=3)
 
+        # BOOLEAN BUTTON
+        row = 10
+        flag2 = tk.BooleanVar()
+        flag2.set(False) #set check state
+        chk2 = tk.Checkbutton(root, text='GBM', var=flag2)
+        chk2.grid(row=row, column=5, columnspan=3)
+
         # Fix the width of the first column
         root.columnconfigure(0, minsize=200, weight=1)
         for i in range(12):
@@ -252,13 +259,14 @@ def hyperparameters_selection(name, var, n):
         selected_ind_1 = preset_options_1.index(selected_var_1.get()) + 1
         selected_ind_2 = preset_options_2.index(selected_var_2.get()) + 1
         flag1 = int(flag1.get() == True)
+        flag2 = int(flag2.get() == True)
         argv = [name, var, selected_ind_1, selected_ind_2, flag1,
                 selected_option_3.get(), selected_option_4.get(), selected_option_5.get(),
-                selected_option_6.get(), selected_option_7.get(), selected_option_8.get(), n, int(selected_option_9.get())]
+                selected_option_6.get(), selected_option_7.get(), selected_option_8.get(), n, int(selected_option_9.get()), flag2]
 
     except tk.TclError:
         argv = [name, var, preset[0] + 1, preset[1] + 1, 1,
                 int(preset_options_3[preset[2]]), int(preset_options_4[preset[3]]), int(preset_options_5[preset[4]]),
-                int(preset_options_6[preset[5]]), float(preset_options_7[preset[6]]), int(preset_options_8[preset[7]]), n, int(preset_options_9[0])]
+                int(preset_options_6[preset[5]]), float(preset_options_7[preset[6]]), int(preset_options_8[preset[7]]), n, int(preset_options_9[0]), 0]
 
     return argv

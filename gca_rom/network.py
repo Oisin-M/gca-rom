@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from gca_rom import gca, scaling
+from gca_rom import gca, gbm, scaling
 
 
 class HyperParams:
@@ -59,9 +59,10 @@ class HyperParams:
         self.miles = []
         self.gamma = 0.0001
         self.num_nodes = 0
+        self.GBM = argv[13]
         self.net_dir = './' + self.net_name + '/' + self.net_run + '/' + self.variable + '_' + self.net_name + '_lmap' + str(self.lambda_map) + '_btt' + str(self.bottleneck_dim) \
                             + '_seed' + str(self.seed) + '_lv' + str(len(self.layer_vec)-2) + '_hc' + str(len(self.hidden_channels)) + '_nd' + str(self.nodes) \
-                            + '_ffn' + str(self.ffn) + '_skip' + str(self.skip) + '_lr' + str(self.learning_rate) + '_sc' + str(self.scaling_type) + '_rate' + str(self.rate) + '/'
+                            + '_ffn' + str(self.ffn) + '_skip' + str(self.skip) + '_lr' + str(self.learning_rate) + '_sc' + str(self.scaling_type) + '_rate' + str(self.rate) + '_gbm' + str(self.GBM) + '/'
         self.cross_validation = True
 
 
@@ -104,10 +105,18 @@ class Net(torch.nn.Module):
         Returns the decoded output, encoded representation, and estimated encoded representation.
     """
 
-    def __init__(self, HyperParams, interpolation_grid):
+    def __init__(self, HyperParams, domain=None):
         super().__init__()
-        self.encoder = gca.Encoder(HyperParams.hidden_channels, HyperParams.bottleneck_dim, HyperParams.num_nodes, ffn=HyperParams.ffn, skip=HyperParams.skip, interpolation_grid=interpolation_grid)
-        self.decoder = gca.Decoder(HyperParams.hidden_channels, HyperParams.bottleneck_dim, HyperParams.num_nodes, ffn=HyperParams.ffn, skip=HyperParams.skip, interpolation_grid=interpolation_grid)
+        if HyperParams.GBM:
+            if domain is None:
+                raise Exception("Must specify domain for GBM.")
+            else:
+                interpolation_grid = self.generate_interpolation_grid(domain, HyperParams.bottleneck_dim)
+            self.encoder = gbm.Encoder(HyperParams.hidden_channels, HyperParams.bottleneck_dim, HyperParams.num_nodes, ffn=HyperParams.ffn, skip=HyperParams.skip, interpolation_grid=interpolation_grid)
+            self.decoder = gbm.Decoder(HyperParams.hidden_channels, HyperParams.bottleneck_dim, HyperParams.num_nodes, ffn=HyperParams.ffn, skip=HyperParams.skip, interpolation_grid=interpolation_grid)
+        else:
+            self.encoder = gca.Encoder(HyperParams.hidden_channels, HyperParams.bottleneck_dim, HyperParams.num_nodes, ffn=HyperParams.ffn, skip=HyperParams.skip)
+            self.decoder = gca.Decoder(HyperParams.hidden_channels, HyperParams.bottleneck_dim, HyperParams.num_nodes, ffn=HyperParams.ffn, skip=HyperParams.skip)
 
         self.act_map = HyperParams.act
         self.layer_vec = HyperParams.layer_vec
@@ -116,6 +125,43 @@ class Net(torch.nn.Module):
         self.maptovec = nn.ModuleList()
         for k in range(self.steps):
             self.maptovec.append(nn.Linear(self.layer_vec[k], self.layer_vec[k+1]))
+
+    def generate_interpolation_grid(self, domain, bottleneck_dim):
+        import shapely.geometry as geo
+        import numpy as np
+        if domain=='stokes':
+            data = [
+                    [(1,2), (1,1), (2,1), (1,2)],
+                    [(2,1), (2,2), (1,2), (2,1)],
+                    [(0,3), (0,2), (1,2), (0,3)],
+                    [(1,2), (1,3), (0,3), (1,2)],
+                    [(0,2), (0,1), (1,1), (0,2)],
+                    [(1,1), (1,2), (0,2), (1,1)],
+                    [(0,1), (0,0), (1,0), (0,1)],
+                    [(1,0), (1,1), (0,1), (1,0)]
+            ]
+            domain_list = [geo.Polygon(np.array(x).astype('float')) for x in data]
+
+            def random_point_in_shp(shp):
+                within = False
+                while not within:
+                    x = np.random.uniform(shp.bounds[0], shp.bounds[2])
+                    y = np.random.uniform(shp.bounds[1], shp.bounds[3])
+                    within = shp.contains(geo.Point(x, y))
+                return (x,y)
+
+            # Randomly sample from each subdomain
+            reference_pts = []
+            for domain in domain_list:
+                for i in range(bottleneck_dim // len(domain_list)):
+                    reference_pts.append(random_point_in_shp(domain))
+            for i in range(bottleneck_dim % len(domain_list)):
+                reference_pts.append(random_point_in_shp(domain_list[i]))
+
+            interpolation_grid = torch.tensor(reference_pts)
+        else:
+            raise Exception("GBM currently only implemented for Stokes problem.")
+        return interpolation_grid
 
     def solo_encoder(self, data):
         x = self.encoder(data)
