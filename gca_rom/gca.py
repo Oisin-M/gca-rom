@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch_geometric.nn import GMMConv
-
+from torch_geometric.nn.unpool import knn_interpolate
 
 class Encoder(torch.nn.Module):
     """
@@ -27,7 +27,7 @@ class Encoder(torch.nn.Module):
     forward(data): A convenience function that calls the encoder method.
     """
 
-    def __init__(self, hidden_channels, bottleneck, input_size, ffn, skip, act=F.elu):
+    def __init__(self, hidden_channels, bottleneck, input_size, ffn, skip, interpolation_grid, act=F.elu):
         super().__init__()
         self.hidden_channels = hidden_channels
         self.depth = len(self.hidden_channels)
@@ -36,13 +36,12 @@ class Encoder(torch.nn.Module):
         self.skip = skip
         self.bottleneck = bottleneck
         self.input_size = input_size
+        self.interpolation_grid = interpolation_grid
 
         self.down_convs = torch.nn.ModuleList()
         for i in range(self.depth-1):
             self.down_convs.append(GMMConv(self.hidden_channels[i], self.hidden_channels[i+1], dim=1, kernel_size=5))
-
-        self.fc_in1 = nn.Linear(self.input_size*self.hidden_channels[-1], self.ffn)
-        self.fc_in2 = nn.Linear(self.ffn, self.bottleneck)
+        
         self.reset_parameters()
 
     def encoder(self, data):
@@ -55,10 +54,9 @@ class Encoder(torch.nn.Module):
             if self.skip:
                 x = x + data.x
             idx += 1
-
-        x = x.reshape(data.num_graphs, self.input_size * self.hidden_channels[-1])
-        x = self.act(self.fc_in1(x))
-        x = self.fc_in2(x)
+        
+        x = knn_interpolate(x, data.pos, self.interpolation_grid.repeat(data.num_graphs, 1), data.batch, torch.tensor([[i]*self.bottleneck for i in range(data.num_graphs)]).flatten().to(edge_index.device))
+        x = x.reshape(data.num_graphs, self.bottleneck * self.hidden_channels[-1])
         return x
 
     def reset_parameters(self):
@@ -103,7 +101,7 @@ class Decoder(torch.nn.Module):
             Performs a forward pass on the input data x and returns the output.
     """
 
-    def __init__(self, hidden_channels, bottleneck, input_size, ffn, skip, act=F.elu):
+    def __init__(self, hidden_channels, bottleneck, input_size, ffn, skip, interpolation_grid, act=F.elu):
         super().__init__()
         self.hidden_channels = hidden_channels
         self.depth = len(self.hidden_channels)
@@ -112,9 +110,7 @@ class Decoder(torch.nn.Module):
         self.skip = skip
         self.bottleneck = bottleneck
         self.input_size = input_size
-
-        self.fc_out1 = nn.Linear(self.bottleneck, self.ffn)
-        self.fc_out2 = nn.Linear(self.ffn, self.input_size * self.hidden_channels[-1])
+        self.interpolation_grid = interpolation_grid
 
         self.up_convs = torch.nn.ModuleList()
         for i in range(self.depth-1):
@@ -127,10 +123,10 @@ class Decoder(torch.nn.Module):
         edge_weight = data.edge_attr
         edge_index = data.edge_index
 
-        x = self.act(self.fc_out1(x))
-        x = self.act(self.fc_out2(x))
-        h = x.reshape(data.num_graphs*self.input_size, self.hidden_channels[-1])
-        x = h
+        x = x.reshape(data.num_graphs*self.bottleneck, self.hidden_channels[-1])
+        x = knn_interpolate(x, self.interpolation_grid.repeat(data.num_graphs, 1), data.pos, torch.tensor([[i]*self.bottleneck for i in range(data.num_graphs)]).flatten().to(edge_index.device),  data.batch)
+        
+        h = x
         idx = 0
         for layer in self.up_convs:
             if (idx == self.depth - 2): 

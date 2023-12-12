@@ -104,10 +104,10 @@ class Net(torch.nn.Module):
         Returns the decoded output, encoded representation, and estimated encoded representation.
     """
 
-    def __init__(self, HyperParams):
+    def __init__(self, HyperParams, interpolation_grid):
         super().__init__()
-        self.encoder = gca.Encoder(HyperParams.hidden_channels, HyperParams.bottleneck_dim, HyperParams.num_nodes, ffn=HyperParams.ffn, skip=HyperParams.skip)
-        self.decoder = gca.Decoder(HyperParams.hidden_channels, HyperParams.bottleneck_dim, HyperParams.num_nodes, ffn=HyperParams.ffn, skip=HyperParams.skip)
+        self.encoder = gca.Encoder(HyperParams.hidden_channels, HyperParams.bottleneck_dim, HyperParams.num_nodes, ffn=HyperParams.ffn, skip=HyperParams.skip, interpolation_grid=interpolation_grid)
+        self.decoder = gca.Decoder(HyperParams.hidden_channels, HyperParams.bottleneck_dim, HyperParams.num_nodes, ffn=HyperParams.ffn, skip=HyperParams.skip, interpolation_grid=interpolation_grid)
 
         self.act_map = HyperParams.act
         self.layer_vec = HyperParams.layer_vec
